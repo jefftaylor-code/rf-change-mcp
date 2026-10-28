@@ -1,182 +1,52 @@
-\# RFDS MCP Validation Prototype
+# RF Change Validation MCP
 
+A small Python MCP server that lets an AI agent check proposed cellular RF changes against explicit engineering rules before anyone touches the network. Anything the rules don't cover fails closed instead of being guessed.
 
+## Why I built it
 
-Small Python prototype demonstrating how an MCP server can expose bounded,
+A recruiter described an operator team that wanted RF change requests (the data behind an RF data sheet, or RFDS) validated automatically, with AI tools that could not make things up. I built this prototype to show how that could work: domain rules a network engineer would recognise, wrapped in typed MCP tools an agent can call safely.
 
-deterministic RF modification validation tools.
+This is a prototype built on synthetic data. It is not any operator's implementation, a production rules engine, or a full 3GPP validator.
 
+## What it does
 
+| Tool | Checks |
+| --- | --- |
+| `validate_nr_add` | Duplicate NR-ARFCN on the sector, band and bandwidth limits for n5, n71, n41 and n77, pre-change KPI evidence |
+| `validate_carrier_change` | ARFCN actually changes, no simultaneous bandwidth change, spectrum authorisation, neighbour-relation review, pre-change KPIs, rollback plan |
+| `server_status` | Reports scope and fail-closed mode |
 
-This is a learning/prototyping project. It is not a Verizon RFDS implementation,
+Every result is structured: `PASS` or `FAIL`, machine-readable reason codes (for example `DUPLICATE_NR_ARFCN`, `ROLLBACK_PLAN_MISSING`) and plain-language messages.
 
-production rules engine, or complete 3GPP validation system.
+## How it's built
 
-
-
-\## Purpose
-
-
-
-The prototype combines cellular RF domain rules with structured MCP tooling and
-
-fail-closed validation.
-
-
-
-Implemented MCP tools:
-
-
-
-\- `server\_status`
-
-\- `validate\_nr\_add`
-
-\- `validate\_carrier\_change`
-
-
-
-\## Architecture
-
-
-
+```
 MCP client / MCP Inspector
+        |  stdio (MCP)
+        v
+FastMCP server (src/server.py)
+        +-- Pydantic request models (typed, validated input)
+        +-- deterministic RF rule functions (no model in the loop)
+        +-- structured PASS / FAIL results
+        +-- pytest regression suite
+```
 
-&#x20;       |
+The rule functions are separate from the MCP wrapper, so the engineering logic is tested on its own. Both tools were discovered and called through MCP Inspector with structured inputs and outputs.
 
-&#x20;       | stdio / MCP
+## Why it matters
 
-&#x20;       v
+Bad RF changes cost operators outages, drive tests and engineer hours. Letting AI agents help with change review is only useful if they cannot approve something the rules don't support. This pattern (typed inputs, deterministic rules, reason codes, fail-closed) is how you let automation near a live network without letting it guess.
 
-Python FastMCP server
+## Run it
 
-&#x20;       |
+```bash
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python -m pytest -v            # 16 passed
+python -m src.server           # start the MCP server over stdio
+```
 
-&#x20;       +-- Pydantic structured request models
+Tests cover parameterised synthetic scenarios (valid and invalid NR adds, duplicate carriers, unsupported bandwidths, missing KPI evidence, carrier changes, spectrum, neighbour and rollback checks), input validation, and golden-result regression.
 
-&#x20;       |
-
-&#x20;       +-- deterministic RF validation functions
-
-&#x20;       |
-
-&#x20;       +-- structured PASS / FAIL responses
-
-&#x20;       |
-
-&#x20;       +-- pytest regression suite
-
-
-
-RF validation logic is kept separate from the MCP wrapper so the domain rules
-
-can be tested deterministically.
-
-
-
-\## RF Scenarios
-
-
-
-\### validate\_nr\_add
-
-
-
-Bounded NR carrier-add validation including:
-
-
-
-\- duplicate NR-ARFCN detection
-
-\- prototype band/bandwidth boundaries
-
-\- pre-change KPI evidence requirement
-
-\- structured PASS/FAIL reason codes
-
-
-
-\### validate\_carrier\_change
-
-
-
-Bounded LTE/NR carrier-change validation including:
-
-
-
-\- ARFCN modification validation
-
-\- rejection of simultaneous bandwidth changes as out of scope
-
-\- spectrum authorization evidence
-
-\- neighbor-relation impact review
-
-\- pre-change KPI evidence
-
-\- rollback-plan requirement
-
-
-
-Unsupported or invalid conditions fail closed rather than being inferred.
-
-
-
-\## Testing
-
-
-
-The project uses `pytest` with:
-
-
-
-\- fixtures
-
-\- parameterized synthetic RF scenarios
-
-\- structured-input validation tests
-
-\- golden-scenario regression testing
-
-
-
-Current result:
-
-
-
-`16 passed`
-
-
-
-Synthetic cases include valid and invalid NR adds, duplicate carriers, unsupported
-
-bandwidth combinations, missing KPI evidence, carrier changes, spectrum checks,
-
-neighbor-review checks, and rollback-plan checks.
-
-
-
-\## MCP Validation
-
-
-
-The server was exercised using MCP Inspector.
-
-
-
-Both `validate\_nr\_add` and the subsequently added `validate\_carrier\_change` tool
-
-were discovered and successfully invoked through MCP using structured inputs and
-
-outputs.
-
-
-
-\## Run Tests
-
-
-
-```powershell
-
-python -m pytest -v
-
+Built by [Jeff Taylor](https://jefferyataylor.com).
